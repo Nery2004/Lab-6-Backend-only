@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"time"
+	"os"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -13,73 +13,44 @@ import (
 var db *pgx.Conn
 
 func main() {
-	// Conectar a la base de datos con reintentos
+	// Conexion a la base de datos
 	var err error
-	for i := 0; i < 5; i++ {
-		db, err = pgx.Connect(context.Background(), "postgres://nery:161204@db:5432/mi_base_de_datos?sslmode=disable")
-		if err == nil {
-			break
-		}
-		log.Printf("Intento %d: Error conectando a DB: %v\n", i+1, err)
-		time.Sleep(3 * time.Second)
-	}
-	
+	db, err = pgx.Connect(context.Background(), "postgres://user:password@db:5432/matches_db")
 	if err != nil {
-		log.Fatal("No se pudo conectar a PostgreSQL después de 5 intentos:", err)
+		log.Fatalf("Error conectando a la base de datos", err)
 	}
 	defer db.Close(context.Background())
 
-	// Verificar/Crear tabla al iniciar
-	_, err = db.Exec(context.Background(), `
-	CREATE TABLE IF NOT EXISTS matches (
-		id SERIAL PRIMARY KEY,
-		team1 TEXT NOT NULL,
-		team2 TEXT NOT NULL,
-		score1 INTEGER,
-		score2 INTEGER,
-		date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-	)`)
-	if err != nil {
-		log.Fatal("Error creando tabla:", err)
-	}
-
-	// Configurar router Gin
+	// Configurar Gin con CORS
 	r := gin.Default()
+	r.Use(CORSMiddleware())
 
-	// Middleware para loggear peticiones
-	r.Use(func(c *gin.Context) {
-		log.Printf("Petición: %s %s", c.Request.Method, c.Request.URL.Path)
-		c.Next()
-	})
-
-	// Ruta raíz
-	r.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "API de Partidos",
-			"endpoints": []string{
-				"GET    /api/matches",
-				"GET    /api/matches/:id",
-				"POST   /api/matches",
-				"PUT    /api/matches/:id",
-				"DELETE /api/matches/:id",
-			},
-		})
-	})
-
-	// Rutas API
+	// Endpoints requeridos
 	r.GET("/api/matches", getMatches)
 	r.GET("/api/matches/:id", getMatchByID)
 	r.POST("/api/matches", createMatch)
 	r.PUT("/api/matches/:id", updateMatch)
 	r.DELETE("/api/matches/:id", deleteMatch)
 
-	// Manejar favicon.ico
-	r.StaticFile("/favicon.ico", "./assets/favicon.ico")
-
+	// Servir el frontend
+	r.StaticFile("/", "./LaLigaTracker.html")
+	r.StaticFile("/favicon.ico", "./assets/favicon.ico") 
 	// Iniciar servidor
-	log.Println("Servidor iniciado en :8080")
-	if err := r.Run("0.0.0.0:8080"); err != nil {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Servidor iniciado en :%s\n", port)
+	if err := r.Run("0.0.0.0:" + port); err != nil {
 		log.Fatalf("Error al iniciar servidor: %v", err)
+	}
+}
+// Middleware CORS
+func CORSMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
+		c.Next()
 	}
 }
 

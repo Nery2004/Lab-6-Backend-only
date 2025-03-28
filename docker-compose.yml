@@ -1,28 +1,30 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:latest
-    restart: always
-    container_name: postgres_db
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: matches_db
     ports:
       - "5432:5432"
-    environment:
-      POSTGRES_USER: nery
-      POSTGRES_PASSWORD: 161204
-      POSTGRES_DB: mi_base_de_datos
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d matches_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: .
     ports:
       - "8080:8080"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     environment:
-      DATABASE_URL: "postgres://nery:161204@db:5432/mi_base_de_datos?sslmode=disable"
-    restart: unless-stopped
+      - WAIT_HOSTS=db:5432
 
 volumes:
   postgres_data:
