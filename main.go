@@ -29,7 +29,7 @@ func main() {
 	r.GET("/api/matches", getMatches)
 	r.GET("/api/matches/:id", getMatchByID)
 	r.POST("/api/matches", createMatch)
-	r.PUT("/api/matches/:id", updateMatch)
+	r.PUT("/api/matches/:id", upmatchDateMatch)
 	r.DELETE("/api/matches/:id", deleteMatch)
 
 	// Servir el frontend
@@ -47,16 +47,23 @@ func main() {
 }
 // Middleware CORS
 func CORSMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE")
-		c.Next()
-	}
+    return func(c *gin.Context) {
+        c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+        c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+        
+        if c.Request.Method == "OPTIONS" {
+            c.AbortWithStatus(204)
+            return
+        }
+        
+        c.Next()
+    }
 }
 
 // Obtener todos los partidos
 func getMatches(c *gin.Context) {
-    rows, err := db.Query(context.Background(), "SELECT id, team1, team2, score1, score2, date FROM matches")
+    rows, err := db.Query(context.Background(), "SELECT id, homeTeam, awayTeam, score1, score2, matchDate FROM matches")
     if err != nil {
         log.Printf("Error en consulta SQL: %v", err) // Log detallado
         c.JSON(http.StatusInternalServerError, gin.H{
@@ -70,18 +77,21 @@ func getMatches(c *gin.Context) {
 	var matches []map[string]interface{}
 	for rows.Next() {
 		var id int
-		var team1, team2 string
+		var homeTeam, awayTeam string
 		var score1, score2 int
-		var date string
-		rows.Scan(&id, &team1, &team2, &score1, &score2, &date)
+		var matchDate string
+		rows.Scan(&id, &homeTeam, &awayTeam, &score1, &score2, &matchDate)
+
+		homeTeam = strings.ToUpper(homeTeam)
+		awayTeam = strings.ToUpper(awayTeam)
 
 		matches = append(matches, map[string]interface{}{
 			"id":     id,
-			"team1":  team1,
-			"team2":  team2,
+			"homeTeam":  homeTeam,
+			"awayTeam":  awayTeam,
 			"score1": score1,
 			"score2": score2,
-			"date":   date,
+			"matchDate":   matchDate,
 		})
 	}
 
@@ -95,23 +105,25 @@ func getMatchByID(c *gin.Context) {
 
 	var match map[string]interface{}
 	var matchID int
-	var team1, team2 string
+	var homeTeam, awayTeam string
 	var score1, score2 int
-	var date string
+	var matchDate string
 
-	err := row.Scan(&matchID, &team1, &team2, &score1, &score2, &date)
+	err := row.Scan(&matchID, &homeTeam, &awayTeam, &score1, &score2, &matchDate)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Partido no encontrado"})
 		return
 	}
+	homeTeam = strings.ToUpper(homeTeam)
+	awayTeam = strings.ToUpper(awayTeam)
 
 	match = map[string]interface{}{
 		"id":     matchID,
-		"team1":  team1,
-		"team2":  team2,
+		"homeTeam":  homeTeam,
+		"awayTeam":  awayTeam,
 		"score1": score1,
 		"score2": score2,
-		"date":   date,
+		"matchDate":   matchDate,
 	}
 
 	c.JSON(http.StatusOK, match)
@@ -120,8 +132,8 @@ func getMatchByID(c *gin.Context) {
 // Crear un nuevo partido
 func createMatch(c *gin.Context) {
 	var match struct {
-		Team1  string `json:"team1"`
-		Team2  string `json:"team2"`
+		homeTeam  string `json:"homeTeam"`
+		awayTeam  string `json:"awayTeam"`
 		Score1 int    `json:"score1"`
 		Score2 int    `json:"score2"`
 	}
@@ -131,8 +143,8 @@ func createMatch(c *gin.Context) {
 		return
 	}
 
-	_, err := db.Exec(context.Background(), "INSERT INTO matches (team1, team2, score1, score2) VALUES ($1, $2, $3, $4)",
-		match.Team1, match.Team2, match.Score1, match.Score2)
+	_, err := db.Exec(context.Background(), "INSERT INTO matches (homeTeam, awayTeam, score1, score2) VALUES ($1, $2, $3, $4)",
+		match.homeTeam, match.awayTeam, match.Score1, match.Score2)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al crear partido"})
 		return
@@ -142,7 +154,7 @@ func createMatch(c *gin.Context) {
 }
 
 // Actualizar un partido existente
-func updateMatch(c *gin.Context) {
+func upmatchDateMatch(c *gin.Context) {
 	id := c.Param("id")
 
 	var match struct {
@@ -155,7 +167,7 @@ func updateMatch(c *gin.Context) {
 		return
 	}
 
-	_, err := db.Exec(context.Background(), "UPDATE matches SET score1=$1, score2=$2 WHERE id=$3", match.Score1, match.Score2, id)
+	_, err := db.Exec(context.Background(), "UPmatchDate matches SET score1=$1, score2=$2 WHERE id=$3", match.Score1, match.Score2, id)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar partido"})
 		return
