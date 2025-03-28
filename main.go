@@ -14,7 +14,7 @@ var db *pgx.Conn
 func main() {
 	// Conectar a la base de datos
 	var err error
-	db, err = pgx.Connect(context.Background(), "postgres://user:password@localhost:5432/matches_db")
+	db, err = pgx.Connect(context.Background(), "postgres://nery:161204@db:5432/mi_base_de_datos?sslmode=disable")
 	if err != nil {
 		log.Fatal("Error conectando a la base de datos:", err)
 	}
@@ -31,16 +31,20 @@ func main() {
 	r.DELETE("/api/matches/:id", deleteMatch)
 
 	// Ejecutar el servidor en el puerto 8080
-	r.Run(":8080")
+	r.Run("0.0.0.0:8080")
 }
 
 // Obtener todos los partidos
 func getMatches(c *gin.Context) {
-	rows, err := db.Query(context.Background(), "SELECT * FROM matches")
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error obteniendo partidos"})
-		return
-	}
+    rows, err := db.Query(context.Background(), "SELECT id, team1, team2, score1, score2, date FROM matches")
+    if err != nil {
+        log.Printf("Error en consulta SQL: %v", err) // Log detallado
+        c.JSON(http.StatusInternalServerError, gin.H{
+            "error": "Error obteniendo partidos",
+            "details": err.Error(), // Muestra el error real
+        })
+        return
+    }
 	defer rows.Close()
 
 	var matches []map[string]interface{}
