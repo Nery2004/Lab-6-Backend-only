@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
@@ -12,26 +13,74 @@ import (
 var db *pgx.Conn
 
 func main() {
-	// Conectar a la base de datos
+	// Conectar a la base de datos con reintentos
 	var err error
-	db, err = pgx.Connect(context.Background(), "postgres://nery:161204@db:5432/mi_base_de_datos?sslmode=disable")
+	for i := 0; i < 5; i++ {
+		db, err = pgx.Connect(context.Background(), "postgres://nery:161204@db:5432/mi_base_de_datos?sslmode=disable")
+		if err == nil {
+			break
+		}
+		log.Printf("Intento %d: Error conectando a DB: %v\n", i+1, err)
+		time.Sleep(3 * time.Second)
+	}
+	
 	if err != nil {
-		log.Fatal("Error conectando a la base de datos:", err)
+		log.Fatal("No se pudo conectar a PostgreSQL después de 5 intentos:", err)
 	}
 	defer db.Close(context.Background())
 
-	// Crear el router de Gin
+	// Verificar/Crear tabla al iniciar
+	_, err = db.Exec(context.Background(), `
+	CREATE TABLE IF NOT EXISTS matches (
+		id SERIAL PRIMARY KEY,
+		team1 TEXT NOT NULL,
+		team2 TEXT NOT NULL,
+		score1 INTEGER,
+		score2 INTEGER,
+		date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`)
+	if err != nil {
+		log.Fatal("Error creando tabla:", err)
+	}
+
+	// Configurar router Gin
 	r := gin.Default()
 
-	// Definir rutas
+	// Middleware para loggear peticiones
+	r.Use(func(c *gin.Context) {
+		log.Printf("Petición: %s %s", c.Request.Method, c.Request.URL.Path)
+		c.Next()
+	})
+
+	// Ruta raíz
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "API de Partidos",
+			"endpoints": []string{
+				"GET    /api/matches",
+				"GET    /api/matches/:id",
+				"POST   /api/matches",
+				"PUT    /api/matches/:id",
+				"DELETE /api/matches/:id",
+			},
+		})
+	})
+
+	// Rutas API
 	r.GET("/api/matches", getMatches)
 	r.GET("/api/matches/:id", getMatchByID)
 	r.POST("/api/matches", createMatch)
 	r.PUT("/api/matches/:id", updateMatch)
 	r.DELETE("/api/matches/:id", deleteMatch)
 
-	// Ejecutar el servidor en el puerto 8080
-	r.Run("0.0.0.0:8080")
+	// Manejar favicon.ico
+	r.StaticFile("/favicon.ico", "./assets/favicon.ico")
+
+	// Iniciar servidor
+	log.Println("Servidor iniciado en :8080")
+	if err := r.Run("0.0.0.0:8080"); err != nil {
+		log.Fatalf("Error al iniciar servidor: %v", err)
+	}
 }
 
 // Obtener todos los partidos
