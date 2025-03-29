@@ -33,7 +33,11 @@ func main() {
 	r.POST("/api/matches", createMatch)
 	r.PUT("/api/matches/:id", upmatchDateMatch)
 	r.DELETE("/api/matches/:id", deleteMatch)
-
+	r.PATCH("/api/matches/:id/goals", updateGoals)
+	r.PATCH("/api/matches/:id/yellowcards", updateYellowCard)
+	r.PATCH("/api/matches/:id/redcards", updateRedCard)
+	r.PATCH("/api/matches/:id/extratime", updateExtraTime)
+	
 	// Servir el frontend
 	r.StaticFile("/", "./LaLigaTracker.html")
 	r.StaticFile("/favicon.ico", "./assets/favicon.ico") 
@@ -192,4 +196,75 @@ func deleteMatch(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Partido eliminado"})
+}
+
+// Actualizar goles de un partido
+func updateGoals(c *gin.Context) {
+	id := c.Param("id")
+
+	var scores struct {
+		Score1 int `json:"score1"`
+		Score2 int `json:"score2"`
+	}
+
+	if err := c.ShouldBindJSON(&scores); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+		return
+	}
+
+	_, err := db.Exec(context.Background(), "UPDATE matches SET score1=$1, score2=$2 WHERE id=$3", scores.Score1, scores.Score2, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al actualizar goles"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Goles actualizados"})
+}
+
+// Registrar tarjeta amarilla
+func updateYellowCard(c *gin.Context) {
+	id := c.Param("id")
+
+	_, err := db.Exec(context.Background(), "UPDATE matches SET yellow_cards = yellow_cards + 1 WHERE id=$1", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al registrar tarjeta amarilla"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Tarjeta amarilla registrada"})
+}
+
+// Registrar tarjeta roja
+func updateRedCard(c *gin.Context) {
+	id := c.Param("id")
+
+	_, err := db.Exec(context.Background(), "UPDATE matches SET red_cards = red_cards + 1 WHERE id=$1", id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al registrar tarjeta roja"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Tarjeta roja registrada"})
+}
+
+// Registrar tiempo extra
+func updateExtraTime(c *gin.Context) {
+	id := c.Param("id")
+
+	var extraTime struct {
+		ExtraMinutes int `json:"extra_minutes"`
+	}
+
+	if err := c.ShouldBindJSON(&extraTime); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Datos inválidos"})
+		return
+	}
+
+	_, err := db.Exec(context.Background(), "UPDATE matches SET extra_time = extra_time + $1 WHERE id=$2", extraTime.ExtraMinutes, id)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Error al registrar tiempo extra"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Tiempo extra registrado"})
 }
